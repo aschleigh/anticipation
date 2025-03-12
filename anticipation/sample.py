@@ -117,6 +117,7 @@ def add_token(model, z, tokens, top_p, current_time, debug=False):
 
 
 def generate(model, start_time, end_time, inputs=None, controls=None, top_p=1.0, debug=False, delta=DELTA*TIME_RESOLUTION):
+    print("IN GENERATE")
     if inputs is None:
         inputs = []
 
