@@ -82,11 +82,20 @@ def add_token(model, z, tokens, top_p, current_time, debug=False):
     offset = ops.min_time(history, seconds=False)
     history[::3] = [tok - offset for tok in history[::3]] # relativize time in the history buffer
 
+    # changed
+    attention_weights = []
+
     new_token = []
     with torch.no_grad():
         for i in range(3):
             input_tokens = torch.tensor(z + history + new_token).unsqueeze(0).to(model.device)
-            logits = model(input_tokens).logits[0,-1]
+
+            # changed
+            outputs = model(input_tokens, output_attentions=True)
+            logits = outputs.logits[0,-1]
+            attentions = outputs.attentions 
+            attention_weights.append(attentions)
+
 
             idx = input_tokens.shape[1]-1
             logits = safe_logits(logits, idx)
@@ -104,7 +113,7 @@ def add_token(model, z, tokens, top_p, current_time, debug=False):
     if debug:
         print(f'  OFFSET = {offset}, LEN = {len(history)}, TIME = {tokens[::3][-5:]}')
 
-    return new_token
+    return new_token, attention_weights
 
 
 def generate(model, start_time, end_time, inputs=None, controls=None, top_p=1.0, debug=False, delta=DELTA*TIME_RESOLUTION):
@@ -147,6 +156,9 @@ def generate(model, start_time, end_time, inputs=None, controls=None, top_p=1.0,
     current_time = ops.max_time(prompt, seconds=False)
     if debug:
         print('Current time:', current_time)
+    
+    # changed
+    collected_attention = []
 
     with tqdm(range(end_time-start_time)) as progress:
         if controls:
@@ -173,7 +185,8 @@ def generate(model, start_time, end_time, inputs=None, controls=None, top_p=1.0,
                     # nothing more to anticipate
                     anticipated_time = math.inf
 
-            new_token = add_token(model, z, tokens, top_p, max(start_time,current_time))
+            new_token, attention_weights = add_token(model, z, tokens, top_p, max(start_time,current_time))
+            collected_attention.append(attention_weights)
             new_time = new_token[0] - TIME_OFFSET
             if new_time >= end_time:
                 break
@@ -191,7 +204,7 @@ def generate(model, start_time, end_time, inputs=None, controls=None, top_p=1.0,
             progress.update(dt)
 
     events, _ = ops.split(tokens)
-    return ops.sort(ops.unpad(events) + future)
+    return ops.sort(ops.unpad(events) + future), collected_attention
 
 
 def generate_ar(model, start_time, end_time, inputs=None, controls=None, top_p=1.0, debug=False, delta=DELTA*TIME_RESOLUTION):
