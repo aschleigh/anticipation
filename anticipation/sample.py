@@ -207,19 +207,19 @@ def generate(model, start_time, end_time, inputs=None, controls=None, top_p=1.0,
     # events, _ = ops.split(tokens)
     # return ops.sort(ops.unpad(events) + future), collected_attention
 
-    with tqdm(range(end_time - start_time)) as progress:
-        while current_time < end_time:
-            input_tokens = torch.tensor(z + tokens).unsqueeze(0).to(model.device)
+    # with tqdm(range(end_time - start_time)) as progress:
+    #     while current_time < end_time:
+    input_tokens = torch.tensor(z + tokens).unsqueeze(0).to(model.device)
 
-            with torch.no_grad():
-                outputs = model(input_tokens, output_attentions=True)
-                attentions = outputs.attentions  
-            
-            collected_attention.append(attentions)
+    with torch.no_grad():
+        outputs = model(input_tokens, output_attentions=True)
+        attentions = outputs.attentions  
+    
+    collected_attention.append(attentions)
 
             # move time forward without modifying tokens
-            current_time += 1
-            progress.update(1)
+            # current_time += 1
+            # progress.update(1)
 
     return collected_attention
 
