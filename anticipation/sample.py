@@ -213,13 +213,13 @@ def generate(model, start_time, end_time, inputs=None, controls=None, top_p=1.0,
 
             with torch.no_grad():
                 outputs = model(input_tokens, output_attentions=True)
-                attentions = outputs.attentions  # Attention weights from the model
+                attentions = outputs.attentions  
             
             collected_attention.append(attentions)
 
-            # Move time forward without modifying tokens
-            current_time += 1
-            progress.update(1)
+            # move time forward without modifying tokens
+            current_time += 0.1
+            progress.update(0.1)
 
     return collected_attention
 
