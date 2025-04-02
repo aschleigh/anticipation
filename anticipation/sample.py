@@ -161,52 +161,67 @@ def generate(model, start_time, end_time, inputs=None, controls=None, top_p=1.0,
     # changed
     collected_attention = []
 
-    with tqdm(range(end_time-start_time)) as progress:
-        if controls:
-            atime, adur, anote = controls[0:3]
-            anticipated_tokens = controls[3:]
-            anticipated_time = atime - ATIME_OFFSET
-        else:
-            # nothing to anticipate
-            anticipated_time = math.inf
+    # with tqdm(range(end_time-start_time)) as progress:
+    #     if controls:
+    #         atime, adur, anote = controls[0:3]
+    #         anticipated_tokens = controls[3:]
+    #         anticipated_time = atime - ATIME_OFFSET
+    #     else:
+    #         # nothing to anticipate
+    #         anticipated_time = math.inf
 
-        while True:
-            while current_time >= anticipated_time - delta:
-                tokens.extend([atime, adur, anote])
-                if debug:
-                    note = anote - ANOTE_OFFSET
-                    instr = note//2**7
-                    print('A', atime - ATIME_OFFSET, adur - ADUR_OFFSET, instr, note - (2**7)*instr)
+    #     while True:
+    #         while current_time >= anticipated_time - delta:
+    #             tokens.extend([atime, adur, anote])
+    #             if debug:
+    #                 note = anote - ANOTE_OFFSET
+    #                 instr = note//2**7
+    #                 print('A', atime - ATIME_OFFSET, adur - ADUR_OFFSET, instr, note - (2**7)*instr)
 
-                if len(anticipated_tokens) > 0:
-                    atime, adur, anote = anticipated_tokens[0:3]
-                    anticipated_tokens = anticipated_tokens[3:]
-                    anticipated_time = atime - ATIME_OFFSET
-                else:
-                    # nothing more to anticipate
-                    anticipated_time = math.inf
+    #             if len(anticipated_tokens) > 0:
+    #                 atime, adur, anote = anticipated_tokens[0:3]
+    #                 anticipated_tokens = anticipated_tokens[3:]
+    #                 anticipated_time = atime - ATIME_OFFSET
+    #             else:
+    #                 # nothing more to anticipate
+    #                 anticipated_time = math.inf
 
-            new_token, attention_weights = add_token(model, z, tokens, top_p, max(start_time,current_time))
-            collected_attention.append(attention_weights)
-            new_time = new_token[0] - TIME_OFFSET
-            if new_time >= end_time:
-                break
+    #         new_token, attention_weights = add_token(model, z, tokens, top_p, max(start_time,current_time))
+    #         collected_attention.append(attention_weights)
+    #         new_time = new_token[0] - TIME_OFFSET
+    #         if new_time >= end_time:
+    #             break
 
-            if debug:
-                new_note = new_token[2] - NOTE_OFFSET
-                new_instr = new_note//2**7
-                new_pitch = new_note - (2**7)*new_instr
-                print('C', new_time, new_token[1] - DUR_OFFSET, new_instr, new_pitch)
+    #         if debug:
+    #             new_note = new_token[2] - NOTE_OFFSET
+    #             new_instr = new_note//2**7
+    #             new_pitch = new_note - (2**7)*new_instr
+    #             print('C', new_time, new_token[1] - DUR_OFFSET, new_instr, new_pitch)
 
-            tokens.extend(new_token)
-            dt = new_time - current_time
-            assert dt >= 0
-            current_time = new_time
-            progress.update(dt)
+    #         tokens.extend(new_token)
+    #         dt = new_time - current_time
+    #         assert dt >= 0
+    #         current_time = new_time
+    #         progress.update(dt)
 
-    events, _ = ops.split(tokens)
-    return ops.sort(ops.unpad(events) + future), collected_attention
+    # events, _ = ops.split(tokens)
+    # return ops.sort(ops.unpad(events) + future), collected_attention
 
+    with tqdm(range(end_time - start_time)) as progress:
+        while current_time < end_time:
+            input_tokens = torch.tensor(z + tokens).unsqueeze(0).to(model.device)
+
+            with torch.no_grad():
+                outputs = model(input_tokens, output_attentions=True)
+                attentions = outputs.attentions  # Attention weights from the model
+            
+            collected_attention.append(attentions)
+
+            # Move time forward without modifying tokens
+            current_time += 1
+            progress.update(1)
+
+    return collected_attention
 
 def generate_ar(model, start_time, end_time, inputs=None, controls=None, top_p=1.0, debug=False, delta=DELTA*TIME_RESOLUTION):
     if inputs is None:
